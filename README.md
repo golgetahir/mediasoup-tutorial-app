@@ -15,6 +15,7 @@ The server app runs on any supported platform by Mediasoup. The client app runs 
 ```
 # create and modify the configuration
 # make sure you set the proper IP for mediasoup.webRtcTransport.listenIps
+cp config.example.js config.js
 nano config.js
 
 # install dependencies and build mediasoup
