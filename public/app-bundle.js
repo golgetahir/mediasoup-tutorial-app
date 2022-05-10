@@ -407,7 +407,7 @@ closeToggle.addEventListener("click", () => {
 
 },{"./config":2,"./lib/socket.io-promise":3,"mediasoup-client":60,"socket.io-client":73}],2:[function(require,module,exports){
 module.exports = {
-  listenIp: '0.0.0.0',
+  listenIp: '192.168.1.108',
   listenPort: 3000,
   sslCrt: './server/ssl/fullchain.pem',
   sslKey: './server/ssl/privkey.pem',
@@ -440,7 +440,16 @@ module.exports = {
             mimeType: 'audio/opus',
             clockRate: 48000,
             channels: 2
-          }
+          },
+          {
+            kind: 'video',
+            mimeType: 'video/VP8',
+            clockRate: 90000,
+            parameters:
+              {
+                'x-google-start-bitrate': 1000
+              }
+          },
         ]
     },
     // WebRtcTransport settings
@@ -452,7 +461,6 @@ module.exports = {
         }
       ],
       maxIncomingBitrate: 1500000,
-      enableSctp : true,
       initialAvailableOutgoingBitrate: 1000000,
     }
   }
