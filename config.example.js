@@ -1,8 +1,8 @@
 module.exports = {
   listenIp: '0.0.0.0',
   listenPort: 3000,
-  sslCrt: './server/ssl/fullchain.pem',
-  sslKey: './server/ssl/privkey.pem',
+  sslCrt: './certs/fullchain.pem',
+  sslKey: './certs/privkey.pem',
   mediasoup: {
     // Worker settings
     worker: {

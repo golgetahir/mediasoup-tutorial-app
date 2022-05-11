@@ -24,3 +24,15 @@ npm install
 # create the client bundle and start the server app
 npm start
 ```
+
+## Run with docker
+
+```
+docker build . -t <your username>/mediasoup-demo
+```
+
+Run the image you previously built:
+
+```
+docker run -p 3000:3000 -p 10000-10100:10000-10100/udp -d <your username>/mediasoup-demo
+```
