@@ -9,9 +9,10 @@ RUN \
 WORKDIR /service
 
 COPY package.json .
-RUN npm install && npm install -g browserify@16.5.1
+RUN npm install && npm install -g browserify
 COPY server.js .
 COPY config.js .
+COPY client.js .
 COPY lib lib
 COPY public public
 COPY certs certs
