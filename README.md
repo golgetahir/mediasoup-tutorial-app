@@ -25,6 +25,8 @@ npm install
 npm start
 ```
 
+Application will be running in https://localhost:3000
+
 ## Run with docker
 
 ```
