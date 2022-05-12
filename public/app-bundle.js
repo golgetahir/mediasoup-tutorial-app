@@ -618,8 +618,8 @@ sendButton.addEventListener("click", sendMessage);
 module.exports = {
   listenIp: '192.168.1.108',
   listenPort: 3000,
-  sslCrt: './server/ssl/fullchain.pem',
-  sslKey: './server/ssl/privkey.pem',
+  sslCrt: './certs/fullchain.pem',
+  sslKey: './certs/privkey.pem',
   mediasoup: {
     // Worker settings
     worker: {
