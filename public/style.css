@@ -236,8 +236,8 @@ body {
 }
 
 .channelName:hover {
-    background: rgb(146, 109, 180);
-    width: 250px;
+    background: rgb(15, 73, 54);
+    width: 100%;
     text-align: left;
     text-decoration: underline;
 }

@@ -12,9 +12,6 @@ let socketServer;
 let expressApp;
 let producer;
 let consumer;
-let producerTransport;
-let dataTransport;
-let consumerTransport;
 let mediasoupRouter;
 
 (async () => {
@@ -35,6 +32,9 @@ let transports = []
 let rooms = []
 let producers = []      // [ { socketId1, roomName1, producer, }, ... ]
 let consumers = []
+let dataProducers = []
+let dataConsumers = []
+let sctpParameters = [];
 
 async function runExpressApp() {
   expressApp = express();
@@ -124,7 +124,7 @@ async function runSocketServer() {
       try {
         const { transport, params } = await createWebRtcTransport();
         //producerTransport = transport;
-        addTransport(transport, roomName, false, socket.id)
+        addTransport(transport, roomName, false, socket.id, false)
         callback(params);
       } catch (err) {
         console.error(err);
@@ -133,10 +133,27 @@ async function runSocketServer() {
     });
 
     //Create dataTransport
-    socket.on('createDataTransport', async (data, callback) => {
+    socket.on('createDataProducerTransport', async (data, callback) => {
       try {
         const { transport, params } = await createWebRtcTransport();
-        dataTransport = transport;
+        addTransport(transport, roomName, false, socket.id, true)
+        console.log("asdldddddddddddddddddddddddddddd")
+        console.log(data.sctpParameters)
+        console.log(data.sctpCapabilities)
+
+        callback(params);
+      } catch (err) {
+        console.error(err);
+        callback({ error: err.message });
+      }
+    });
+
+    //Create dataTransport
+    socket.on('createDataConsumerTransport', async (data, callback) => {
+      try {
+        console.log("Creating data consumer transport")
+        const { transport, params } = await createWebRtcTransport();
+        addTransport(transport, roomName, true, socket.id, true)
         callback(params);
       } catch (err) {
         console.error(err);
@@ -148,9 +165,8 @@ async function runSocketServer() {
       try {
         console.log("Creating consumer transport")
         const { transport, params } = await createWebRtcTransport();
-        //consumerTransport = transport;
         console.log(transport)
-        addTransport(transport, roomName, true, socket.id)
+        addTransport(transport, roomName, true, socket.id, false)
         callback(params);
       } catch (err) {
         console.error(err);
@@ -160,7 +176,14 @@ async function runSocketServer() {
 
     socket.on('connectProducerTransport', async (data, callback) => {
       console.log("Connecting Producer Transport")
-      await getTransport(socket.id).connect({ dtlsParameters: data.dtlsParameters });
+      await getTransport(socket.id, false).connect({ dtlsParameters: data.dtlsParameters, sctpParameters: data.sctpParameters });
+      callback();
+    });
+
+    socket.on('connectDataProducerTransport', async (data, callback) => {
+      console.log("Connecting Data Producer Transport")
+      console.log(getTransport(socket.id, true))
+      await getTransport(socket.id, true).connect({ dtlsParameters: data.dtlsParameters, sctpParameters: data.sctpParameters });
       callback();
     });
 
@@ -168,20 +191,29 @@ async function runSocketServer() {
       console.log("Connecting Consumer Transport, incoming data below")
       console.log(data)
       const consumerTransport = transports.find(transportData => (
-        transportData.consumer && transportData.transport.id == data.transportId
+        transportData.consumer && transportData.transport.id == data.transportId && !data.dataChannel
       )).transport
 
       await consumerTransport.connect({ dtlsParameters: data.dtlsParameters });
       callback();
     });
 
+    socket.on('connectDataConsumerTransport', async (data, callback) => {
+      console.log("Connecting Data Consumer Transport, incoming data below")
+      console.log(data)
+      const consumerTransport = transports.find(transportData => (
+        transportData.consumer && transportData.transport.id == data.transportId && data.dataChannel
+      )).transport
+
+      await consumerTransport.connect({ dtlsParameters: data.dtlsParameters, sctpParameters: data.sctpParameters });
+      callback();
+    });
+
     socket.on('produce', async (data, callback) => {
       const {kind, rtpParameters} = data;
-      console.log("---------------")
-      console.log(getTransport(socket.id))
-      console.log("ppppppppppppppppppppppppppppppppppppp")
-      console.log(producers.length)
-      producer = await getTransport(socket.id).produce({ kind, rtpParameters });
+      console.log("Starting the producer")
+      console.log("-------------------------------------------------------------------------")
+      producer = await getTransport(socket.id, false).produce({ kind, rtpParameters });
 
       //Close event for producer
       producer.on('transportclose', () => {
@@ -190,14 +222,43 @@ async function runSocketServer() {
       })
 
       callback({ id: producer.id, producersExist: producers.length>0 ? true : false });
-      addProducer(producer, roomName, socket.id)
+      addProducer(producer, roomName, socket.id, false)
       informConsumers(roomName, socket.id, producer.id)
+    });
+
+    socket.on('producedata', async (data, callback) => {
+      const {kind, rtpParameters} = data;
+      console.log("Produce DATA CALLLEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED")
+      console.log(data)
+      console.log("------------------------------------------------------")
+      producer = await getTransport(socket.id, true).produceData({sctpStreamParameters :
+        {
+          streamId : 0,
+          ordered  : true
+        }
+      });
+
+      //Close event for producer
+      producer.on('transportclose', () => {
+        console.log('transport for this producer closed ')
+        producer.close()
+      })
+
+      callback({ id: producer.id, producersExist: producers.length>0 ? true : false });
+      addProducer(producer, roomName, socket.id, true)
+      informDataChannelConsumers(roomName, socket.id, producer.id)
+    });
+
+    socket.on('consumedata', async (data, callback) => {
+      console.log("Consume data call on the server side, data is below")
+      console.log(data)
+      callback(await createDataConsumer(data.sctpStreamParameters, data.remoteProducerId, data.transportId, socket.id, data.dataChannel));
     });
 
     socket.on('consume', async (data, callback) => {
       console.log("Consume call on the server side, data is below")
       console.log(data)
-      callback(await createConsumer(data.rtpCapabilities, data.remoteProducerId, data.transportId, socket.id));
+      callback(await createConsumer(data.rtpCapabilities, data.remoteProducerId, data.transportId, socket.id, data.dataChannel));
     });
 
     socket.on('resume', async (data, callback) => {
@@ -207,11 +268,10 @@ async function runSocketServer() {
 
     socket.on('getProducers', callback => {
       //return all producer transports
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!")
       let producerList = []
       producers.forEach(producerData => {
         if (producerData.socketId !== socket.id && producerData.roomName === roomName) {
-          producerList = [...producerList, producerData.producer.id]
+          producerList = [...producerList,[producerData.producer.id, producerData.dataChannel]]
         }
       })
       // return the producer list back to the client
@@ -224,30 +284,22 @@ async function runSocketServer() {
       producer = await getProducer(socket.id)
       producer.close()
       callback();
-      consumers = removeItems(consumers, socket.id, 'consumer')
-      producers = removeItems(producers, socket.id, 'producer')
-      transports = removeItems(transports, socket.id, 'transport')
+      consumers = removeItems(consumers, socket.id, 'consumer', false)
+      producers = removeItems(producers, socket.id, 'producer', false)
+      transports = removeItems(transports, socket.id, 'transport', false)
     });
 
 
   });
 }
-function removeItems(items, socketId, type){
+function removeItems(items, socketId, type, dataChannel){
   console.log("Removing = " + type )
-  console.log("?????????????????????????????????????????????????????????????????????")
-  console.log(items)
   items.forEach(item => {
-    if (item.socketId === socketId) {
-      console.log(item)
+    if (item.socketId === socketId && item.dataChannel == dataChannel) {
       item[type].close()
     }
   })
   items = items.filter(item => item.socketId !== socketId)
-  console.log("22222222222222222222222")
-  console.log(items)
-  console.log("-----------")
-  console.log(producers)
-
   return items
 }
 
@@ -261,11 +313,11 @@ function getProducer(socketId){
   return producerTransport.producer
 }
 
-function addTransport(transport, roomName, consumer, socketId){
+function addTransport(transport, roomName, consumer, socketId, dataChannel){
   console.log("Adding transport = " + transport + " consumer = " + consumer + " socket Id = " + socketId)
   transports = [
     ...transports,
-    { socketId: socketId, transport, roomName, consumer, }
+    { socketId: socketId, transport, roomName, consumer, dataChannel }
   ]
 
   peers[socketId] = {
@@ -277,10 +329,10 @@ function addTransport(transport, roomName, consumer, socketId){
   }
 }
 
-function addProducer(producer, roomName, socketId){
+function addProducer(producer, roomName, socketId, dataChannel){
   producers = [
     ...producers,
-    { socketId: socketId, producer, roomName, }
+    { socketId: socketId, producer, roomName, dataChannel}
   ]
 
   peers[socketId] = {
@@ -288,9 +340,25 @@ function addProducer(producer, roomName, socketId){
     producers: [
       ...peers[socketId].producers,
       producer.id,
+      dataChannel,
     ]
   }
   console.log("Producer added")
+}
+
+async function informDataChannelConsumers(roomName, socketId, id){
+  console.log(`just joined, id ${id} ${roomName}, ${socketId}`)
+  // A new producer just joined
+  // let all consumers to consume this producer
+  producers.forEach(producerData => {
+    if (producerData.socketId !== socketId && producerData.roomName === roomName && producerData.dataChannel) {
+      const producerSocket = peers[producerData.socketId].socket
+      console.log("*********************************")
+      console.log(id)
+      // use socket to send producer id to producer
+      producerSocket.emit('newChannelProducer',  id )
+    }
+  })
 }
 
 async function informConsumers(roomName, socketId, id){
@@ -301,7 +369,7 @@ async function informConsumers(roomName, socketId, id){
   console.log(roomName)
   console.log(producers[0].roomName)
   producers.forEach(producerData => {
-    if (producerData.socketId !== socketId && producerData.roomName === roomName) {
+    if (producerData.socketId !== socketId && producerData.roomName === roomName && !producerData.dataChannel) {
       const producerSocket = peers[producerData.socketId].socket
       console.log("*********************************")
       console.log(id)
@@ -311,9 +379,11 @@ async function informConsumers(roomName, socketId, id){
   })
 }
 
-function getTransport(socketId){
+function getTransport(socketId, isDataChannel){
   console.log("Getting transport with socketId = " + socketId)
-  const [producerTransport] = transports.filter(transport => transport.socketId === socketId && !transport.consumer)
+  console.log(isDataChannel)
+
+  const [producerTransport] = transports.filter(transport => transport.socketId === socketId && !transport.consumer && transport.dataChannel == isDataChannel)
   return producerTransport.transport
 }
 
@@ -349,11 +419,13 @@ async function createWebRtcTransport() {
     enableUdp: true,
     enableTcp: true,
     preferUdp: true,
+    enableFp: true,
     enableSctp: true,
     initialAvailableOutgoingBitrate,
   });
   transport.on('dtlsstatechange', dtlsState => {
     if (dtlsState === 'closed') {
+      console.log("Transport closed due to dtls change")
       transport.close()
     }
   })
@@ -376,11 +448,11 @@ async function createWebRtcTransport() {
   };
 }
 
-function addConsumer(consumer, roomName, socketId){
+function addConsumer(consumer, roomName, socketId, dataChannel){
   // add the consumer to the consumers list
   consumers = [
     ...consumers,
-    { socketId: socketId, consumer, roomName, }
+    { socketId: socketId, consumer, roomName, dataChannel }
   ]
 
   // add the consumer id to the peers list
@@ -393,18 +465,13 @@ function addConsumer(consumer, roomName, socketId){
   }
 }
 
-async function createConsumer( rtpCapabilities,  remoteProducerId, serverConsumerTransportId, socketId) {
+async function createConsumer( rtpCapabilities,  remoteProducerId, serverConsumerTransportId, socketId, dataChannel) {
 
   const router = rooms[roomName].router
-  console.log("-----------------------------23123213123")
-  console.log(transports[0].consumer )
-  console.log(transports[0].transport.id)
-  console.log("-4564***************")
-  console.log(serverConsumerTransportId)
-  console.log(remoteProducerId)
+  console.log("Creating consumer for remote producerId = " + remoteProducerId)
 
   let consumerTransport = transports.find(transportData => (
-    transportData.consumer && transportData.transport.id == serverConsumerTransportId
+    transportData.consumer && transportData.transport.id == serverConsumerTransportId && transportData.dataChannel == dataChannel
   )).transport
 
   if (!router.canConsume(
@@ -439,7 +506,7 @@ async function createConsumer( rtpCapabilities,  remoteProducerId, serverConsume
       consumers = consumers.filter(consumerData => consumerData.consumer.id !== consumer.id)
     })
 
-    addConsumer(consumer, roomName, socketId)
+    addConsumer(consumer, roomName, socketId,false)
   } catch (error) {
     console.error('consume failed', error);
     return;
@@ -454,6 +521,65 @@ async function createConsumer( rtpCapabilities,  remoteProducerId, serverConsume
     id: consumer.id,
     kind: consumer.kind,
     rtpParameters: consumer.rtpParameters,
+    type: consumer.type,
+    producerPaused: consumer.producerPaused
+  };
+}
+async function createDataConsumer( sctpStreamParameters,  remoteProducerId, serverConsumerTransportId, socketId, dataChannel) {
+
+  const router = rooms[roomName].router
+  console.log("Creating data consumer for remote producerId = " + remoteProducerId)
+  console.log(dataChannel)
+  console.log(remoteProducerId)
+  console.log(sctpParameters)
+  
+
+  let consumerTransport = transports.find(transportData => (
+    transportData.consumer && transportData.transport.id == serverConsumerTransportId && transportData.dataChannel == dataChannel
+  )).transport
+
+  try {
+    consumer = await consumerTransport.consumeData({
+      dataProducerId: remoteProducerId,
+      sctpStreamParameters : {
+        streamId : 0,
+        ordered  : true
+      },
+    });
+
+    consumer.on('transportclose', () => {
+      console.log('transport close from consumer')
+    })
+
+    consumer.on('dataproducerclose', () => {
+      console.log('producer of consumer closed')
+      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+      const producerSocket = peers[socketId].socket
+
+      producerSocket.emit('dataProducerClosed',remoteProducerId)
+
+      consumerTransport.close([])
+      transports = transports.filter(transportData => transportData.transport.id !== consumerTransport.id)
+      consumer.close()
+      consumers = consumers.filter(consumerData => consumerData.consumer.id !== consumer.id)
+    })
+
+    addConsumer(consumer, roomName, socketId, true)
+  } catch (error) {
+    console.error('consume failed', error);
+    return;
+  }
+
+  if (consumer.type === 'simulcast') {
+    await consumer.setPreferredLayers({ spatialLayer: 2, temporalLayer: 2 });
+  }
+
+  return {
+    producerId: remoteProducerId,
+    id: consumer.id,
+    kind: consumer.kind,
+    rtpParameters: consumer.rtpParameters,
+    sctpStreamParameters: consumer.sctpStreamParameters,
     type: consumer.type,
     producerPaused: consumer.producerPaused
   };
