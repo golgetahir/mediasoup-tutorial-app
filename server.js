@@ -194,8 +194,7 @@ async function runSocketServer() {
     });
 
     socket.on('connectDataConsumerTransport', async (data, callback) => {
-      console.log("Connecting Data Consumer Transport, incoming data below")
-      console.log(data)
+      console.log("Connecting Data Consumer Transport")
       const consumerTransport = transports.find(transportData => (
         transportData.consumer && transportData.transport.id == data.transportId && data.dataChannel
       )).transport
@@ -242,14 +241,13 @@ async function runSocketServer() {
     });
 
     socket.on('consumedata', async (data, callback) => {
-      console.log("Consume data call on the server side, data is below")
-      console.log(data)
+      console.log("Consume data call on the server side")
       callback(await createDataConsumer(data.sctpStreamParameters, data.remoteProducerId, data.transportId, socket.id, data.dataChannel));
     });
 
     socket.on('consume', async (data, callback) => {
       console.log("Consume call on the server side, data is below")
-      console.log(data)
+
       callback(await createConsumer(data.rtpCapabilities, data.remoteProducerId, data.transportId, socket.id, data.dataChannel));
     });
 
@@ -274,7 +272,7 @@ async function runSocketServer() {
     socket.on('producerClose', async (data, callback) => {
       console.log("Closing the producer for = " + socket.id)
       producer = await getProducer(socket.id, false)
-      console.log(producer)
+
       producer.close()
       callback();
       consumers = removeItems(consumers, socket.id, 'consumer', false)
@@ -362,8 +360,8 @@ async function informConsumers(roomName, socketId, id){
   producers.forEach(producerData => {
     if (producerData.socketId !== socketId && producerData.roomName === roomName && !producerData.dataChannel) {
       const producerSocket = peers[producerData.socketId].socket
-      console.log("Informing consumer")
-      console.log(id)
+      console.log("Informing consumer id = " + id)
+
       // use socket to send producer id to producer
       producerSocket.emit('newProducer',  id )
     }
@@ -371,8 +369,7 @@ async function informConsumers(roomName, socketId, id){
 }
 
 function getTransport(socketId, isDataChannel){
-  console.log("Getting transport with socketId = " + socketId)
-  console.log(isDataChannel)
+  console.log("Getting transport with socketId = " + socketId + " and dataChannel = " + dataChannel)
 
   const [producerTransport] = transports.filter(transport => transport.socketId === socketId && !transport.consumer && transport.dataChannel == isDataChannel)
   return producerTransport.transport

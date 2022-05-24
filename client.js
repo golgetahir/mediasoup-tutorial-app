@@ -61,7 +61,6 @@ function connectToServer(){
   
     //append to the audio container
     newElem.innerHTML = '<p id="p' + producerId + '" >'+producerId+'</p>'
-    console.log("-------!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!-------")
     participantContainer.appendChild(newElem)
     document.getElementById('p'+producerId)
   
@@ -112,7 +111,6 @@ async function initializeDataChannel(){
     'urls' : 'stun:stun1.l.google.com:19302'
   }]});
 
-  console.log(transport)
   transport.on('connect', async ({ dtlsParameters, sctpParameters }, callback, errback) => {
     console.log("Connected to the transport for data channel")
     socket.request('connectDataProducerTransport', { dtlsParameters, sctpParameters })
@@ -290,7 +288,6 @@ async function subscribe(remoteProducerId) {
   const transport = device.createRecvTransport({...data, iceServers : [ {
     'urls' : 'stun:stun1.l.google.com:19302'
   }]});
-  console.log(transport)
 
   transport.on('connect', ({ dtlsParameters }, callback, errback) => {
     console.log("Connected to the transport")
@@ -353,8 +350,6 @@ async function subcribeToDataChannel(remoteProducerId) {
   const transport = device.createRecvTransport({...data, iceServers : [ {
     'urls' : 'stun:stun1.l.google.com:19302'
   }]});
-  console.log(transport)
-
   
   transport.on('connect', ({ dtlsParameters }, callback, errback) => {
     console.log("Connected to the data consumer transport")
@@ -423,8 +418,7 @@ function getProducers(){
     producerIds.forEach(id => {
       if(id[1] == true){
         console.log("DATA CHANNEL PRODUCER")
-        console.log(id[0])
-        console.log(connectedProducerIds)
+
         if(!connectedProducerIds.includes(id[0])){
           subcribeToDataChannel(id[0])
         }
