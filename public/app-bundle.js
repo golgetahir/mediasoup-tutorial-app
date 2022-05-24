@@ -23,10 +23,7 @@ let socket
 let rtpCapabilities
 let dataChannelProducer
 let producer
-let consumer
-let consumerTransports = []
-let consumingTransports = [];
-let producerIdTmp;
+let connectedProducerIds = [];
 let audioEnabled = false;
 let params = {
     codecOptions:
@@ -275,7 +272,7 @@ function closeProducer(){
       produce.close()
     })
   }
-  initializeDataChannel()
+  //initializeDataChannel()
 }
 
 async function subscribe(remoteProducerId) {
@@ -380,6 +377,7 @@ async function subcribeToDataChannel(remoteProducerId) {
         //document.querySelector('#remoteVideo').srcObject = await stream;
         // create a new div element for the new consumer media
         console.log("Connected to consumer for data")
+        connectedProducerIds.push(remoteProducerId)
         break;
 
       case 'failed':
@@ -395,9 +393,6 @@ async function subcribeToDataChannel(remoteProducerId) {
   
   const stream = await consumeData(transport, remoteProducerId)
   stream.on('message', async (data) => {
-    console.log("1**********************'''''''''''''''''''''''''''''''''!!!!!!!!!!!")
-    console.log("---")
-    console.log(data)
 
     const chat = document.getElementById('chatWindow')
 
@@ -424,18 +419,18 @@ async function subcribeToDataChannel(remoteProducerId) {
 
 function getProducers(){
   socket.emit('getProducers', producerIds => {
-    console.log(producerIds)
-    console.log("--------")
-    console.log(audioEnabled)
     // for each of the producer create a consumer
     // producerIds.forEach(id => signalNewConsumerTransport(id))
     producerIds.forEach(id => {
       if(id[1] == true){
         console.log("DATA CHANNEL PRODUCER")
-        subcribeToDataChannel(id[0])
+        console.log(id[0])
+        console.log(connectedProducerIds)
+        if(!connectedProducerIds.includes(id[0])){
+          subcribeToDataChannel(id[0])
+        }
       }
       else if(id[1] == false && audioEnabled){
-        console.log("ANANIN AMI FALSE")
         subscribe(id[0])
         const newElem = document.createElement('div')
         newElem.setAttribute('id', `td-${id[0]}`)
@@ -616,7 +611,7 @@ sendButton.addEventListener("click", sendMessage);
 
 },{"./config":2,"./lib/socket.io-promise":3,"mediasoup-client":60,"mediasoup-client/lib/DataProducer":35,"socket.io-client":73}],2:[function(require,module,exports){
 module.exports = {
-  listenIp: '192.168.1.108',
+  listenIp: '0.0.0.0',
   listenPort: 3000,
   sslCrt: './certs/fullchain.pem',
   sslKey: './certs/privkey.pem',
@@ -665,7 +660,7 @@ module.exports = {
     webRtcTransport: {
       listenIps: [
         {
-          ip: '192.168.1.108',
+          ip: '127.0.0.1',
           announcedIp: null,
         }
       ],

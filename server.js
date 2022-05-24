@@ -122,7 +122,7 @@ async function runSocketServer() {
 
     socket.on('createProducerTransport', async (data, callback) => {
       try {
-        const { transport, params } = await createWebRtcTransport();
+        const { transport, params } = await createWebRtcTransport(false);
         //producerTransport = transport;
         addTransport(transport, roomName, false, socket.id, false)
         callback(params);
@@ -135,11 +135,8 @@ async function runSocketServer() {
     //Create dataTransport
     socket.on('createDataProducerTransport', async (data, callback) => {
       try {
-        const { transport, params } = await createWebRtcTransport();
+        const { transport, params } = await createWebRtcTransport(true);
         addTransport(transport, roomName, false, socket.id, true)
-        console.log("asdldddddddddddddddddddddddddddd")
-        console.log(data.sctpParameters)
-        console.log(data.sctpCapabilities)
 
         callback(params);
       } catch (err) {
@@ -152,7 +149,7 @@ async function runSocketServer() {
     socket.on('createDataConsumerTransport', async (data, callback) => {
       try {
         console.log("Creating data consumer transport")
-        const { transport, params } = await createWebRtcTransport();
+        const { transport, params } = await createWebRtcTransport(true);
         addTransport(transport, roomName, true, socket.id, true)
         callback(params);
       } catch (err) {
@@ -164,8 +161,7 @@ async function runSocketServer() {
     socket.on('createConsumerTransport', async (data, callback) => {
       try {
         console.log("Creating consumer transport")
-        const { transport, params } = await createWebRtcTransport();
-        console.log(transport)
+        const { transport, params } = await createWebRtcTransport(false);
         addTransport(transport, roomName, true, socket.id, false)
         callback(params);
       } catch (err) {
@@ -182,7 +178,6 @@ async function runSocketServer() {
 
     socket.on('connectDataProducerTransport', async (data, callback) => {
       console.log("Connecting Data Producer Transport")
-      console.log(getTransport(socket.id, true))
       await getTransport(socket.id, true).connect({ dtlsParameters: data.dtlsParameters, sctpParameters: data.sctpParameters });
       callback();
     });
@@ -212,7 +207,6 @@ async function runSocketServer() {
     socket.on('produce', async (data, callback) => {
       const {kind, rtpParameters} = data;
       console.log("Starting the producer")
-      console.log("-------------------------------------------------------------------------")
       producer = await getTransport(socket.id, false).produce({ kind, rtpParameters });
 
       //Close event for producer
@@ -228,9 +222,7 @@ async function runSocketServer() {
 
     socket.on('producedata', async (data, callback) => {
       const {kind, rtpParameters} = data;
-      console.log("Produce DATA CALLLEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEED")
-      console.log(data)
-      console.log("------------------------------------------------------")
+      console.log("ProduceData called")
       producer = await getTransport(socket.id, true).produceData({sctpStreamParameters :
         {
           streamId : 0,
@@ -281,7 +273,8 @@ async function runSocketServer() {
 
     socket.on('producerClose', async (data, callback) => {
       console.log("Closing the producer for = " + socket.id)
-      producer = await getProducer(socket.id)
+      producer = await getProducer(socket.id, false)
+      console.log(producer)
       producer.close()
       callback();
       consumers = removeItems(consumers, socket.id, 'consumer', false)
@@ -308,8 +301,8 @@ async function createRoom(roomName, socketId){
   //Implement
 }
 
-function getProducer(socketId){
-  const [producerTransport] = producers.filter(producer => producer.socketId === socketId)
+function getProducer(socketId, dataChannel){
+  const [producerTransport] = producers.filter(producer => producer.socketId === socketId && producer.dataChannel === dataChannel)
   return producerTransport.producer
 }
 
@@ -353,7 +346,7 @@ async function informDataChannelConsumers(roomName, socketId, id){
   producers.forEach(producerData => {
     if (producerData.socketId !== socketId && producerData.roomName === roomName && producerData.dataChannel) {
       const producerSocket = peers[producerData.socketId].socket
-      console.log("*********************************")
+      console.log("Informing Data Channel Consumer")
       console.log(id)
       // use socket to send producer id to producer
       producerSocket.emit('newChannelProducer',  id )
@@ -365,13 +358,11 @@ async function informConsumers(roomName, socketId, id){
   console.log(`just joined, id ${id} ${roomName}, ${socketId}`)
   // A new producer just joined
   // let all consumers to consume this producer
-  console.log(socketId)
-  console.log(roomName)
-  console.log(producers[0].roomName)
+
   producers.forEach(producerData => {
     if (producerData.socketId !== socketId && producerData.roomName === roomName && !producerData.dataChannel) {
       const producerSocket = peers[producerData.socketId].socket
-      console.log("*********************************")
+      console.log("Informing consumer")
       console.log(id)
       // use socket to send producer id to producer
       producerSocket.emit('newProducer',  id )
@@ -408,7 +399,7 @@ async function runMediasoupWorker() {
   }
 }
 
-async function createWebRtcTransport() {
+async function createWebRtcTransport(sctpEnabled) {
   const {
     maxIncomingBitrate,
     initialAvailableOutgoingBitrate
@@ -420,7 +411,7 @@ async function createWebRtcTransport() {
     enableTcp: true,
     preferUdp: true,
     enableFp: true,
-    enableSctp: true,
+    enableSctp: sctpEnabled,
     initialAvailableOutgoingBitrate,
   });
   transport.on('dtlsstatechange', dtlsState => {
@@ -495,7 +486,6 @@ async function createConsumer( rtpCapabilities,  remoteProducerId, serverConsume
 
     consumer.on('producerclose', () => {
       console.log('producer of consumer closed')
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
       const producerSocket = peers[socketId].socket
 
       producerSocket.emit('producerClosed',remoteProducerId)
@@ -529,9 +519,6 @@ async function createDataConsumer( sctpStreamParameters,  remoteProducerId, serv
 
   const router = rooms[roomName].router
   console.log("Creating data consumer for remote producerId = " + remoteProducerId)
-  console.log(dataChannel)
-  console.log(remoteProducerId)
-  console.log(sctpParameters)
   
 
   let consumerTransport = transports.find(transportData => (
@@ -553,7 +540,6 @@ async function createDataConsumer( sctpStreamParameters,  remoteProducerId, serv
 
     consumer.on('dataproducerclose', () => {
       console.log('producer of consumer closed')
-      console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
       const producerSocket = peers[socketId].socket
 
       producerSocket.emit('dataProducerClosed',remoteProducerId)
